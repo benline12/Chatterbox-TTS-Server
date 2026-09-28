@@ -30,6 +30,14 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0 && \
     python3 -m pip install --no-cache-dir "protobuf>=4.25.0"
 
+# Known bug on CPU-only installs (resemble-ai/chatterbox#351, devnen/Chatterbox-TTS-Server#6):
+# the multilingual checkpoint's s3gen.pt was pickled with a CUDA storage location, and
+# ChatterboxMultilingualTTS.from_local() loads it without map_location, so torch.load()
+# refuses to deserialize it when torch.cuda.is_available() is False. Patch it in place.
+RUN python3 -c "import chatterbox, pathlib; print(pathlib.Path(chatterbox.__file__).parent / 'mtl_tts.py')" > /tmp/mtl_tts_path && \
+    sed -i 's/torch\.load(ckpt_dir \/ "s3gen\.pt", weights_only=True)/torch.load(ckpt_dir \/ "s3gen.pt", map_location=device, weights_only=True)/' "$(cat /tmp/mtl_tts_path)" && \
+    rm /tmp/mtl_tts_path
+
 # Copy the rest of the application code
 COPY . .
 
